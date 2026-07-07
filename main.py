@@ -529,19 +529,13 @@ def build_chart(
     if current.ok and current.online is not None:
         peak_online = max(peak_online, current.online)
 
-    capacities = [
-        int(row["max_players"])
-        for row in successful
-        if row["max_players"] is not None and int(row["max_players"]) > 0
-    ]
-    if current.ok and current.max_players:
-        capacities.append(current.max_players)
-    y_max = max([peak_online, 1] + capacities)
+    y_max = max(peak_online, 1)
+    y_mid = max(1, round(y_max / 2))
 
-    plot_left = 48
-    plot_right = 780
-    plot_top = 42
-    plot_bottom = 180
+    plot_left = 38
+    plot_right = 742
+    plot_top = 18
+    plot_bottom = 296
     width = plot_right - plot_left
     height = plot_bottom - plot_top
 
@@ -570,6 +564,7 @@ def build_chart(
         "line_points": line_points,
         "area_points": area_points,
         "y_max": y_max,
+        "y_mid": y_mid,
         "peak_online": peak_online,
         "sample_count": len(successful),
     }
@@ -907,9 +902,7 @@ class MinecraftMotdPlugin(Star):
             "online": current.online,
             "max_players": current.max_players,
             "motd_plain": self._safe_text(current.motd_plain),
-            "version_name": self._safe_text(current.version_name),
             "favicon": current.favicon,
-            "latency_ms": current.latency_ms,
             "error": self._safe_text(current.error or "服务器未响应"),
             "sampled_at_text": format_ts(current.sampled_at),
         }
@@ -922,6 +915,9 @@ class MinecraftMotdPlugin(Star):
             "chart_hours": self._chart_hours(),
             "retention_days": self._retention_days(),
             "x_start_label": format_ts(start_ts, "%H:%M"),
+            "x_q1_label": format_ts(start_ts + (end_ts - start_ts) * 0.25, "%H:%M"),
+            "x_mid_label": format_ts(start_ts + (end_ts - start_ts) * 0.5, "%H:%M"),
+            "x_q3_label": format_ts(start_ts + (end_ts - start_ts) * 0.75, "%H:%M"),
             "x_end_label": format_ts(end_ts, "%H:%M"),
             **chart,
         }
@@ -931,8 +927,6 @@ class MinecraftMotdPlugin(Star):
             return (
                 f"{target.server_name} 当前在线：{current.online}/{current.max_players}\n"
                 f"地址：{current.host}:{current.port}\n"
-                f"版本：{current.version_name or '未知'}\n"
-                f"延迟：{current.latency_ms if current.latency_ms is not None else '--'} ms\n"
                 f"MOTD：{current.motd_plain}"
             )
         return (
@@ -970,7 +964,7 @@ class MinecraftMotdPlugin(Star):
                 options={
                     "type": "png",
                     "full_page": False,
-                    "clip": {"x": 0, "y": 0, "width": 920, "height": 560},
+                    "clip": {"x": 0, "y": 0, "width": 790, "height": 500},
                     "omit_background": False,
                     "scale": "device",
                 },

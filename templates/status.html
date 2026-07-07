@@ -10,195 +10,122 @@
     html,
     body {
       margin: 0;
-      width: 920px;
-      height: 560px;
+      width: 790px;
+      height: 500px;
       overflow: hidden;
       background: transparent;
     }
 
     body {
-      color: #f7fafc;
+      color: #f2f6fb;
       font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
     }
 
-    .wrap {
-      width: 920px;
-      height: 560px;
-      padding: 30px;
-      background:
-        radial-gradient(circle at 16% 10%, rgba(50, 185, 130, 0.28), transparent 30%),
-        radial-gradient(circle at 88% 8%, rgba(70, 140, 230, 0.22), transparent 28%),
-        linear-gradient(145deg, #111827 0%, #101820 44%, #111314 100%);
-    }
-
-    .panel {
-      width: 860px;
+    .card {
+      width: 790px;
       height: 500px;
-      border: 1px solid rgba(255, 255, 255, 0.10);
-      border-radius: 8px;
-      background: rgba(9, 13, 19, 0.72);
-      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.32);
+      padding: 14px 16px 12px;
+      background: #1a2027;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
       overflow: hidden;
     }
 
-    .header {
-      display: flex;
-      align-items: center;
-      gap: 18px;
-      padding: 24px 26px 18px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+    .top {
+      display: grid;
+      grid-template-columns: 100px 1fr auto;
+      gap: 12px;
+      height: 122px;
+      align-items: start;
     }
 
     .icon {
-      width: 58px;
-      height: 58px;
-      border-radius: 8px;
-      background: linear-gradient(135deg, #315e44, #1e3f5c);
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 100px;
+      height: 100px;
+      background: #252d36;
       overflow: hidden;
       flex: 0 0 auto;
     }
 
     .icon img {
-      width: 58px;
-      height: 58px;
-      image-rendering: pixelated;
+      width: 100px;
+      height: 100px;
       display: block;
+      image-rendering: pixelated;
     }
 
     .cube {
-      width: 34px;
-      height: 34px;
-      border-radius: 6px;
+      width: 100px;
+      height: 100px;
       background:
-        linear-gradient(90deg, rgba(255,255,255,0.12) 1px, transparent 1px),
-        linear-gradient(rgba(255,255,255,0.12) 1px, transparent 1px),
-        linear-gradient(135deg, #79c267, #368352);
-      background-size: 11px 11px, 11px 11px, auto;
-      box-shadow: inset 0 -10px 0 rgba(64, 38, 20, 0.28);
+        linear-gradient(90deg, rgba(255,255,255,0.10) 1px, transparent 1px),
+        linear-gradient(rgba(255,255,255,0.10) 1px, transparent 1px),
+        linear-gradient(135deg, #77c264 0%, #3b8d52 50%, #6d4d2d 100%);
+      background-size: 20px 20px, 20px 20px, auto;
+      box-shadow: inset 0 -30px 0 rgba(68, 42, 22, 0.34);
     }
 
-    .title {
+    .main {
       min-width: 0;
-      flex: 1;
+      padding-top: 5px;
     }
 
-    h1 {
-      margin: 0;
-      font-size: 30px;
+    .name {
+      font-size: 29px;
       line-height: 1.12;
-      font-weight: 800;
+      font-weight: 500;
       letter-spacing: 0;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .addr {
-      margin-top: 8px;
-      color: #b8c4d7;
-      font-size: 14px;
-      letter-spacing: 0;
-    }
-
-    .badge {
-      padding: 8px 12px;
-      border-radius: 999px;
-      font-size: 14px;
-      font-weight: 700;
-      border: 1px solid rgba(255,255,255,0.14);
-      background: rgba(255,255,255,0.07);
-    }
-
-    .badge.online {
-      color: #bdffd8;
-      background: rgba(34, 197, 94, 0.15);
-      border-color: rgba(74, 222, 128, 0.34);
-    }
-
-    .badge.offline {
-      color: #ffd1d1;
-      background: rgba(239, 68, 68, 0.15);
-      border-color: rgba(248, 113, 113, 0.32);
-    }
-
-    .content {
-      padding: 22px 26px 26px;
-    }
-
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin-bottom: 18px;
-    }
-
-    .stat {
-      min-height: 84px;
-      padding: 14px 16px;
-      border-radius: 8px;
-      background: rgba(255,255,255,0.055);
-      border: 1px solid rgba(255,255,255,0.08);
-    }
-
-    .label {
-      color: #9eacbf;
-      font-size: 13px;
-    }
-
-    .value {
-      margin-top: 8px;
-      font-size: 24px;
-      line-height: 1.1;
-      font-weight: 800;
-      color: #ffffff;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     .motd {
-      height: 72px;
-      margin-bottom: 18px;
-      padding: 15px 17px;
-      border-radius: 8px;
-      background: rgba(12, 18, 28, 0.88);
-      border: 1px solid rgba(255,255,255,0.08);
-      color: #e6edf7;
-      font-size: 19px;
-      line-height: 1.45;
+      margin-top: 8px;
+      height: 58px;
+      color: #d8e6f7;
+      font-size: 23px;
+      line-height: 1.26;
       white-space: pre-wrap;
       word-break: break-word;
       overflow: hidden;
     }
 
-    .chartBox {
-      position: relative;
-      height: 222px;
-      border-radius: 8px;
-      background: rgba(255,255,255,0.045);
-      border: 1px solid rgba(255,255,255,0.08);
-      overflow: hidden;
-    }
-
-    .chartTitle {
-      position: absolute;
-      top: 13px;
-      left: 16px;
-      color: #c9d7e8;
-      font-size: 14px;
+    .motd .ok {
+      color: #5ef06f;
       font-weight: 700;
     }
 
-    .chartMeta {
-      position: absolute;
-      top: 13px;
-      right: 16px;
-      color: #91a1b4;
-      font-size: 13px;
+    .motd .error {
+      color: #ffb8b8;
+    }
+
+    .address {
+      margin-top: 5px;
+      color: #b8bec8;
+      font-size: 18px;
+      line-height: 1.1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .online {
+      padding-top: 7px;
+      color: #b9bec7;
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 500;
+      white-space: nowrap;
+      letter-spacing: 0;
+    }
+
+    .chart {
+      position: relative;
+      height: 350px;
+      margin-top: 0;
+      overflow: hidden;
     }
 
     svg {
@@ -207,92 +134,66 @@
       display: block;
     }
 
-    .foot {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 14px;
-      color: #8b9aae;
+    .footer {
+      position: absolute;
+      right: 4px;
+      bottom: 0;
+      color: rgba(186, 193, 203, 0.72);
       font-size: 12px;
-    }
-
-    .error {
-      color: #ffd1d1;
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="panel">
-      <div class="header">
-        <div class="icon">
-          {% if current.favicon %}
-          <img src="{{ current.favicon }}" alt="">
-          {% else %}
-          <div class="cube"></div>
-          {% endif %}
-        </div>
-        <div class="title">
-          <h1>{{ server_name }}</h1>
-          <div class="addr">{{ host }}:{{ port }}</div>
-        </div>
-        <div class="badge {% if current.ok %}online{% else %}offline{% endif %}">
-          {% if current.ok %}ONLINE{% else %}OFFLINE{% endif %}
-        </div>
+  <div class="card">
+    <div class="top">
+      <div class="icon">
+        {% if current.favicon %}
+        <img src="{{ current.favicon }}" alt="">
+        {% else %}
+        <div class="cube"></div>
+        {% endif %}
       </div>
 
-      <div class="content">
-        <div class="stats">
-          <div class="stat">
-            <div class="label">当前在线</div>
-            <div class="value">{% if current.ok %}{{ current.online }}/{{ current.max_players }}{% else %}--{% endif %}</div>
-          </div>
-          <div class="stat">
-            <div class="label">版本</div>
-            <div class="value">{{ current.version_name or "--" }}</div>
-          </div>
-          <div class="stat">
-            <div class="label">延迟</div>
-            <div class="value">{% if current.latency_ms is not none %}{{ current.latency_ms }} ms{% else %}--{% endif %}</div>
-          </div>
-          <div class="stat">
-            <div class="label">{{ chart_hours }} 小时峰值</div>
-            <div class="value">{{ peak_online }}</div>
-          </div>
-        </div>
-
+      <div class="main">
+        <div class="name">{{ server_name }}</div>
         <div class="motd">{% if current.ok %}{{ current.motd_plain }}{% else %}<span class="error">{{ current.error }}</span>{% endif %}</div>
-
-        <div class="chartBox">
-          <div class="chartTitle">历史在线人数</div>
-          <div class="chartMeta">{{ sample_count }} 个采样点</div>
-          <svg viewBox="0 0 808 222" preserveAspectRatio="none" aria-hidden="true">
-            <defs>
-              <linearGradient id="area" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stop-color="#54d58a" stop-opacity="0.42"/>
-                <stop offset="100%" stop-color="#54d58a" stop-opacity="0.02"/>
-              </linearGradient>
-            </defs>
-            <line x1="48" y1="42" x2="48" y2="180" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
-            <line x1="48" y1="180" x2="780" y2="180" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
-            <line x1="48" y1="111" x2="780" y2="111" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
-            <text x="16" y="48" fill="#8fa2b8" font-size="12">{{ y_max }}</text>
-            <text x="24" y="184" fill="#8fa2b8" font-size="12">0</text>
-            <text x="48" y="204" fill="#8fa2b8" font-size="12">{{ x_start_label }}</text>
-            <text x="736" y="204" fill="#8fa2b8" font-size="12">{{ x_end_label }}</text>
-            {% if area_points %}
-            <polygon points="{{ area_points }}" fill="url(#area)"/>
-            <polyline points="{{ line_points }}" fill="none" stroke="#67e195" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-            {% else %}
-            <text x="330" y="118" fill="#9dadc1" font-size="16">暂无历史采样</text>
-            {% endif %}
-          </svg>
-        </div>
-
-        <div class="foot">
-          <span>{{ scope_label }} · 最后采样：{{ current.sampled_at_text }}</span>
-          <span>数据保留：{{ retention_days }} 天</span>
-        </div>
+        <div class="address">{{ host }}:{{ port }}</div>
       </div>
+
+      <div class="online">
+        {% if current.ok %}{{ current.online }} / {{ current.max_players }}{% else %}OFFLINE{% endif %}
+      </div>
+    </div>
+
+    <div class="chart">
+      <svg viewBox="0 0 758 350" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="lineGlow" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stop-color="#6dff7b" stop-opacity="0.70"/>
+            <stop offset="100%" stop-color="#6dff7b" stop-opacity="0.06"/>
+          </linearGradient>
+        </defs>
+        <line x1="38" y1="18" x2="38" y2="296" stroke="#f2f6fb" stroke-width="2"/>
+        <line x1="38" y1="296" x2="742" y2="296" stroke="#f2f6fb" stroke-width="2"/>
+
+        <text x="0" y="26" fill="#aeb5bf" font-size="24">{{ y_max }}</text>
+        <text x="8" y="162" fill="#aeb5bf" font-size="24">{{ y_mid }}</text>
+        <text x="14" y="299" fill="#aeb5bf" font-size="24">0</text>
+
+        <text x="2" y="335" fill="#aeb5bf" font-size="25">{{ x_start_label }}</text>
+        <text x="170" y="335" fill="#aeb5bf" font-size="25">{{ x_q1_label }}</text>
+        <text x="336" y="335" fill="#aeb5bf" font-size="25">{{ x_mid_label }}</text>
+        <text x="508" y="335" fill="#aeb5bf" font-size="25">{{ x_q3_label }}</text>
+        <text x="666" y="335" fill="#aeb5bf" font-size="25">{{ x_end_label }}</text>
+
+        {% if area_points %}
+        <polygon points="{{ area_points }}" fill="url(#lineGlow)"/>
+        <polyline points="{{ line_points }}" fill="none" stroke="#58f15f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        {% else %}
+        <text x="312" y="160" fill="#aeb5bf" font-size="22">暂无历史在线人数</text>
+        {% endif %}
+      </svg>
+      <div class="footer">{{ scope_label }} · {{ current.sampled_at_text }}</div>
     </div>
   </div>
 </body>
