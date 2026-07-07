@@ -393,6 +393,28 @@ def parse_server_address(address: str, default_port: int) -> Tuple[str, int]:
     return host, port
 
 
+def group_id_from_scope(scope_id: str) -> str:
+    if scope_id.startswith("group:"):
+        return scope_id.removeprefix("group:")
+    if ":group:" in scope_id:
+        return scope_id.split(":group:", 1)[1]
+    return ""
+
+
+def normalize_group_scope_key(value: Any) -> str:
+    key = str(value or "").strip()
+    if not key:
+        return ""
+    if key.startswith("group:"):
+        return key
+    group_id = group_id_from_scope(key)
+    if group_id:
+        return f"group:{group_id}"
+    if key.startswith("private:"):
+        return key
+    return f"group:{key}"
+
+
 def row_to_target(row: sqlite3.Row, configured: bool = True) -> ServerTarget:
     return ServerTarget(
         scope_id=str(row["scope_id"]),
@@ -630,16 +652,134 @@ class MinecraftMotdPlugin(Star):
         return max(1, int(self._cfg("max_parallel_queries", 4)))
 
     def _allow_member_set_server(self) -> bool:
-        value = self._cfg("allow_member_set_server", True)
+        value = self._cfg("allow_member_set_server", False)
         if isinstance(value, bool):
             return value
         return str(value).lower() in {"1", "true", "yes", "on"}
 
+    def _enable_setmotd_command(self) -> bool:
+        value = self._cfg("enable_setmotd_command", True)
+        if isinstance(value, bool):
+            return value
+        return str(value).lower() in {"1", "true", "yes", "on"}
+
+    def _enable_group_whitelist(self) -> bool:
+        value = self._cfg("enable_group_whitelist", False)
+        if isinstance(value, bool):
+            return value
+        return str(value).lower() in {"1", "true", "yes", "on"}
+
+    def _allow_private_chat(self) -> bool:
+        value = self._cfg("allow_private_chat", True)
+        if isinstance(value, bool):
+            return value
+        return str(value).lower() in {"1", "true", "yes", "on"}
+
+    def _use_default_server_for_unconfigured_groups(self) -> bool:
+        value = self._cfg("use_default_server_for_unconfigured_groups", True)
+        if isinstance(value, bool):
+            return value
+        return str(value).lower() in {"1", "true", "yes", "on"}
+
+    def _split_config_list(self, value: Any) -> List[str]:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            raw_items = value
+        else:
+            raw_items = re.split(r"[\s,，;；]+", str(value))
+        return [str(item).strip() for item in raw_items if str(item).strip()]
+
+    def _whitelisted_scopes(self) -> set[str]:
+        return {
+            normalize_group_scope_key(item)
+            for item in self._split_config_list(self._cfg("group_whitelist", ""))
+            if normalize_group_scope_key(item)
+        }
+
+    def _group_server_config(self) -> Dict[str, ServerTarget]:
+        raw = self._cfg("group_servers_json", "{}")
+        if isinstance(raw, dict):
+            data = raw
+        else:
+            raw_text = str(raw or "").strip()
+            if not raw_text:
+                return {}
+            try:
+                data = json.loads(raw_text)
+            except Exception as exc:
+                logger.warning(f"[{PLUGIN_NAME}] group_servers_json 配置解析失败: {exc}")
+                return {}
+        if not isinstance(data, dict):
+            logger.warning(f"[{PLUGIN_NAME}] group_servers_json 必须是 JSON 对象")
+            return {}
+
+        targets: Dict[str, ServerTarget] = {}
+        for key, value in data.items():
+            scope_id = normalize_group_scope_key(key)
+            group_id = group_id_from_scope(scope_id)
+            if not scope_id or not group_id:
+                logger.warning(f"[{PLUGIN_NAME}] 忽略无效群配置键: {key}")
+                continue
+            try:
+                if isinstance(value, str):
+                    host, port = parse_server_address(value, self._port())
+                    server_name = f"{host}:{port}"
+                elif isinstance(value, dict):
+                    address = value.get("address")
+                    if address:
+                        host, port = parse_server_address(str(address), self._port())
+                    else:
+                        host = str(value.get("host") or "").strip()
+                        port = int(value.get("port") or self._port())
+                        if not host:
+                            raise ValueError("缺少 address 或 host")
+                        if port < 1 or port > 65535:
+                            raise ValueError("端口必须在 1-65535 之间")
+                    server_name = str(
+                        value.get("name")
+                        or value.get("server_name")
+                        or f"{host}:{port}"
+                    ).strip()
+                else:
+                    raise ValueError("配置值必须是字符串或对象")
+            except Exception as exc:
+                logger.warning(f"[{PLUGIN_NAME}] 忽略群 {key} 的无效服务器配置: {exc}")
+                continue
+
+            targets[scope_id] = ServerTarget(
+                scope_id=scope_id,
+                scope_label=f"群 {group_id}",
+                server_name=server_name,
+                host=host,
+                port=port,
+                configured=True,
+            )
+        return targets
+
+    def _is_scope_allowed(
+        self,
+        scope_id: str,
+        group_id: str = "",
+        is_private: bool = False,
+    ) -> bool:
+        if is_private:
+            return self._allow_private_chat()
+        normalized = normalize_group_scope_key(scope_id)
+        if normalized in self._group_server_config():
+            return True
+        if not self._enable_group_whitelist():
+            return True
+        whitelist = self._whitelisted_scopes()
+        return normalized in whitelist or (
+            bool(group_id) and normalize_group_scope_key(group_id) in whitelist
+        )
+
     def _scope_from_event(self, event: AstrMessageEvent) -> Tuple[str, str]:
-        platform = event.get_platform_id() or event.get_platform_name() or "unknown"
         group_id = event.get_group_id()
         if group_id:
-            return f"{platform}:group:{group_id}", f"群 {group_id}"
+            return f"group:{group_id}", f"群 {group_id}"
+        platform = event.get_platform_id() or event.get_platform_name() or "unknown"
         session_id = event.get_session_id() or event.unified_msg_origin
         return f"{platform}:private:{session_id}", "私聊会话"
 
@@ -655,9 +795,20 @@ class MinecraftMotdPlugin(Star):
 
     async def _target_for_event(self, event: AstrMessageEvent) -> ServerTarget:
         scope_id, scope_label = self._scope_from_event(event)
+        group_id = event.get_group_id()
+        is_private = not bool(group_id)
+        if not self._is_scope_allowed(scope_id, group_id, is_private):
+            raise PermissionError("当前群未在 MOTD 白名单中，不能使用查询。")
+
+        configured_target = self._group_server_config().get(scope_id)
+        if configured_target is not None:
+            return configured_target
+
         row = await self.store.get_server(scope_id)
         if row is not None:
             return row_to_target(row)
+        if not self._use_default_server_for_unconfigured_groups():
+            raise LookupError("当前群还没有配置 MOTD 查询地址。")
         target = self._default_target(scope_id, scope_label)
         await self.store.upsert_server(target)
         return target
@@ -666,8 +817,7 @@ class MinecraftMotdPlugin(Star):
         await asyncio.sleep(1)
         while True:
             try:
-                rows = await self.store.list_servers()
-                targets = [row_to_target(row) for row in rows]
+                targets = await self._collector_targets()
                 if targets:
                     sem = asyncio.Semaphore(self._max_parallel_queries())
                     await asyncio.gather(
@@ -683,6 +833,32 @@ class MinecraftMotdPlugin(Star):
             except Exception as exc:
                 logger.exception(f"[{PLUGIN_NAME}] collector loop error: {exc}")
             await asyncio.sleep(self._interval())
+
+    async def _collector_targets(self) -> List[ServerTarget]:
+        targets: Dict[str, ServerTarget] = {}
+
+        backend_targets = self._group_server_config()
+        targets.update(backend_targets)
+
+        rows = await self.store.list_servers()
+        for row in rows:
+            target = row_to_target(row)
+            if target.scope_id in targets:
+                continue
+            group_id = group_id_from_scope(target.scope_id)
+            is_private = not bool(group_id)
+            if self._is_scope_allowed(target.scope_id, group_id, is_private):
+                targets[target.scope_id] = target
+
+        if self._use_default_server_for_unconfigured_groups():
+            for scope_id in self._whitelisted_scopes():
+                if scope_id in targets:
+                    continue
+                group_id = group_id_from_scope(scope_id)
+                if group_id:
+                    targets[scope_id] = self._default_target(scope_id, f"群 {group_id}")
+
+        return list(targets.values())
 
     async def _sample_target_safely(
         self,
@@ -769,7 +945,16 @@ class MinecraftMotdPlugin(Star):
     async def motd(self, event: AstrMessageEvent):
         """查询 Minecraft 服务器 MOTD，并返回在线人数历史图片。"""
         await self._ensure_collector()
-        target = await self._target_for_event(event)
+        try:
+            target = await self._target_for_event(event)
+        except PermissionError as exc:
+            yield event.plain_result(str(exc))
+            return
+        except LookupError as exc:
+            yield event.plain_result(
+                f"{exc}\n请管理员在后台 group_servers_json 中配置，或使用 /setmotd <host[:port]> [名称]。"
+            )
+            return
         current = await self._sample_and_store(target)
         rows = await self.store.load_history(
             target.scope_id,
@@ -800,6 +985,9 @@ class MinecraftMotdPlugin(Star):
     @filter.command("setmotd")
     async def setmotd(self, event: AstrMessageEvent, address: str, server_name: str = ""):
         """设置当前群/会话的 Minecraft 查询地址。"""
+        if not self._enable_setmotd_command():
+            yield event.plain_result("当前已关闭群内设置，请管理员在后台配置 MOTD 查询地址。")
+            return
         if not self._allow_member_set_server() and not event.is_admin():
             yield event.plain_result("当前配置仅允许管理员修改 Minecraft 查询地址。")
             return
@@ -812,6 +1000,15 @@ class MinecraftMotdPlugin(Star):
             return
 
         scope_id, scope_label = self._scope_from_event(event)
+        group_id = event.get_group_id()
+        is_private = not bool(group_id)
+        if not self._is_scope_allowed(scope_id, group_id, is_private):
+            yield event.plain_result("当前群未在 MOTD 白名单中，不能设置查询地址。")
+            return
+        if scope_id in self._group_server_config():
+            yield event.plain_result("当前群已由后台 group_servers_json 配置，请在后台修改。")
+            return
+
         display_name = server_name.strip() or f"{host}:{port}"
         target = ServerTarget(
             scope_id=scope_id,
@@ -836,10 +1033,21 @@ class MinecraftMotdPlugin(Star):
     @filter.command("clearmotd")
     async def clearmotd(self, event: AstrMessageEvent):
         """清除当前群/会话的 Minecraft 查询地址设置。"""
+        if not self._enable_setmotd_command():
+            yield event.plain_result("当前已关闭群内设置，请管理员在后台配置 MOTD 查询地址。")
+            return
         if not self._allow_member_set_server() and not event.is_admin():
             yield event.plain_result("当前配置仅允许管理员修改 Minecraft 查询地址。")
             return
         scope_id, scope_label = self._scope_from_event(event)
+        group_id = event.get_group_id()
+        is_private = not bool(group_id)
+        if not self._is_scope_allowed(scope_id, group_id, is_private):
+            yield event.plain_result("当前群未在 MOTD 白名单中，不能清除查询地址。")
+            return
+        if scope_id in self._group_server_config():
+            yield event.plain_result("当前群由后台 group_servers_json 配置，不能在群内清除。")
+            return
         await self.store.delete_server(scope_id)
         yield event.plain_result(
             f"已清除{scope_label}的 Minecraft 查询地址设置。\n"

@@ -35,8 +35,44 @@
     "hint": "4",
     "default": 4
   },
+  "enable_group_whitelist": {
+    "description": "是否启用群白名单。启用后，只有 group_whitelist 或 group_servers_json 中列出的群可以使用 /motd",
+    "type": "bool",
+    "hint": "false",
+    "default": false
+  },
+  "group_whitelist": {
+    "description": "群白名单，支持逗号、空格或换行分隔。可填写群号，例如 123456789，也可填写 group:123456789",
+    "type": "string",
+    "hint": "123456789, 987654321",
+    "default": ""
+  },
+  "group_servers_json": {
+    "description": "后台手动配置每个群的查询地址，JSON 对象。键为群号或 group:群号；值可为地址字符串，或 {\"address\":\"host:port\",\"name\":\"显示名称\"}",
+    "type": "string",
+    "hint": "{\"123456789\":{\"address\":\"mc.example.com:25565\",\"name\":\"生存服\"}}",
+    "default": "{}"
+  },
+  "enable_setmotd_command": {
+    "description": "是否允许在群聊/会话里使用 /setmotd 和 /clearmotd。关闭后只能在后台配置 group_servers_json",
+    "type": "bool",
+    "hint": "true",
+    "default": true
+  },
   "allow_member_set_server": {
     "description": "是否允许普通群成员使用 /setmotd 和 /clearmotd 修改本群查询地址。关闭后仅管理员可修改",
+    "type": "bool",
+    "hint": "false",
+    "default": false
+  },
+  "allow_private_chat": {
+    "description": "是否允许私聊使用 /motd。群白名单只控制群聊，不控制私聊",
+    "type": "bool",
+    "hint": "true",
+    "default": true
+  },
+  "use_default_server_for_unconfigured_groups": {
+    "description": "未单独配置的群是否使用全局默认 host/port。关闭后，群必须通过后台 group_servers_json 或 /setmotd 配置后才能查询",
     "type": "bool",
     "hint": "true",
     "default": true
