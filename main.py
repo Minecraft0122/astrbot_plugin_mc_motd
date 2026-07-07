@@ -969,7 +969,8 @@ class MinecraftMotdPlugin(Star):
                 data,
                 options={
                     "type": "png",
-                    "full_page": True,
+                    "full_page": False,
+                    "clip": {"x": 0, "y": 0, "width": 920, "height": 560},
                     "omit_background": False,
                     "scale": "device",
                 },

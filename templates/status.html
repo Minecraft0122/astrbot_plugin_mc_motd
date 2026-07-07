@@ -7,18 +7,23 @@
       box-sizing: border-box;
     }
 
+    html,
     body {
       margin: 0;
       width: 920px;
-      min-height: 560px;
+      height: 560px;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    body {
       color: #f7fafc;
-      background: #0d1117;
       font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
     }
 
     .wrap {
       width: 920px;
-      min-height: 560px;
+      height: 560px;
       padding: 30px;
       background:
         radial-gradient(circle at 16% 10%, rgba(50, 185, 130, 0.28), transparent 30%),
@@ -28,7 +33,7 @@
 
     .panel {
       width: 860px;
-      min-height: 500px;
+      height: 500px;
       border: 1px solid rgba(255, 255, 255, 0.10);
       border-radius: 8px;
       background: rgba(9, 13, 19, 0.72);
@@ -156,7 +161,7 @@
     }
 
     .motd {
-      min-height: 72px;
+      height: 72px;
       margin-bottom: 18px;
       padding: 15px 17px;
       border-radius: 8px;
@@ -167,6 +172,7 @@
       line-height: 1.45;
       white-space: pre-wrap;
       word-break: break-word;
+      overflow: hidden;
     }
 
     .chartBox {
