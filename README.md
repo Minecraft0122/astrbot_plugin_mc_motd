@@ -79,4 +79,6 @@ group:987654321
 
 插件查询的是 Minecraft Java 版 status 协议，不支持 Bedrock 版服务器。
 
+状态图中的时间轴和最后采样时间固定使用 `UTC+8 / Asia/Shanghai` 显示，不跟随服务器系统时区。
+
 后台采样数据会保存在 AstrBot 数据目录的 `plugin_data/astrbot_plugin_mc_motd/history.sqlite3`。插件会按 `group:群号` 隔离群配置和历史；私聊会按私聊会话单独保存。

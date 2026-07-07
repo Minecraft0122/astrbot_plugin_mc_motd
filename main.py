@@ -9,7 +9,7 @@ import sqlite3
 import struct
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -24,6 +24,7 @@ except Exception:
 
 PLUGIN_NAME = "astrbot_plugin_mc_motd"
 COLOR_CODE_RE = re.compile(r"§.")
+DISPLAY_TZ = timezone(timedelta(hours=8), "Asia/Shanghai")
 
 
 @dataclass
@@ -571,7 +572,7 @@ def build_chart(
 
 
 def format_ts(ts: float, pattern: str = "%Y-%m-%d %H:%M:%S") -> str:
-    return datetime.fromtimestamp(ts).strftime(pattern)
+    return datetime.fromtimestamp(ts, DISPLAY_TZ).strftime(pattern)
 
 
 class MinecraftMotdPlugin(Star):
