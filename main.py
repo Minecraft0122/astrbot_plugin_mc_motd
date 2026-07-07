@@ -90,6 +90,12 @@ class ServerTarget:
     configured: bool = True
 
 
+@dataclass
+class RenderCacheEntry:
+    created_at: float
+    image_url: str
+
+
 class HistoryStore:
     def __init__(self, db_path: Path):
         self.db_path = db_path
@@ -738,6 +744,7 @@ class MinecraftMotdPlugin(Star):
             encoding="utf-8"
         )
         self._collector_task: Optional[asyncio.Task[None]] = None
+        self._render_cache: Dict[str, RenderCacheEntry] = {}
 
     async def initialize(self) -> None:
         await self._ensure_collector()
@@ -796,6 +803,27 @@ class MinecraftMotdPlugin(Star):
 
     def _max_parallel_queries(self) -> int:
         return max(1, int(self._cfg("max_parallel_queries", 4)))
+
+    def _render_cache_seconds(self) -> int:
+        return max(0, int(self._cfg("render_cache_seconds", 45)))
+
+    def _background_image_url(self) -> str:
+        value = str(self._cfg("background_image_url", "https://api.imlazy.ink/img")).strip()
+        if not value:
+            return ""
+        if not (value.startswith("https://") or value.startswith("http://")):
+            logger.warning(f"[{PLUGIN_NAME}] background_image_url 必须以 http:// 或 https:// 开头")
+            return ""
+        if any(ch in value for ch in ['"', "'", "(", ")", "\\", "<", ">"]):
+            logger.warning(f"[{PLUGIN_NAME}] background_image_url 包含不安全字符，已忽略")
+            return ""
+        return value
+
+    def _background_opacity(self) -> float:
+        return min(1.0, max(0.0, float(self._cfg("background_opacity", 0.46))))
+
+    def _background_overlay_opacity(self) -> float:
+        return min(1.0, max(0.0, float(self._cfg("background_overlay_opacity", 0.54))))
 
     def _allow_member_set_server(self) -> bool:
         value = self._cfg("allow_member_set_server", False)
@@ -1075,8 +1103,47 @@ class MinecraftMotdPlugin(Star):
             "x_mid_label": format_ts(start_ts + (end_ts - start_ts) * 0.5, "%H:%M"),
             "x_q3_label": format_ts(start_ts + (end_ts - start_ts) * 0.75, "%H:%M"),
             "x_end_label": format_ts(end_ts, "%H:%M"),
+            "background_image_url": self._safe_text(self._background_image_url()),
+            "background_opacity": f"{self._background_opacity():.2f}",
+            "background_overlay_opacity": f"{self._background_overlay_opacity():.2f}",
             **chart,
         }
+
+    def _render_cache_key(self, target: ServerTarget) -> str:
+        return "|".join(
+            [
+                target.scope_id,
+                target.host,
+                str(target.port),
+                target.server_name,
+                str(self._chart_hours()),
+                str(self._max_chart_points()),
+                self._background_image_url(),
+                f"{self._background_opacity():.2f}",
+                f"{self._background_overlay_opacity():.2f}",
+            ]
+        )
+
+    def _get_cached_render(self, cache_key: str) -> Optional[str]:
+        ttl = self._render_cache_seconds()
+        if ttl <= 0:
+            return None
+        entry = self._render_cache.get(cache_key)
+        if entry is None:
+            return None
+        if time.time() - entry.created_at > ttl:
+            self._render_cache.pop(cache_key, None)
+            return None
+        return entry.image_url
+
+    def _set_cached_render(self, cache_key: str, image_url: str) -> None:
+        ttl = self._render_cache_seconds()
+        if ttl <= 0:
+            return
+        self._render_cache[cache_key] = RenderCacheEntry(
+            created_at=time.time(),
+            image_url=image_url,
+        )
 
     def _plain_status(self, target: ServerTarget, current: MinecraftStatus) -> str:
         if current.ok:
@@ -1105,6 +1172,12 @@ class MinecraftMotdPlugin(Star):
                 f"{exc}\n请管理员在后台 group_servers_json 中配置，或使用 /setmotd <host[:port]> [名称]。"
             )
             return
+        cache_key = self._render_cache_key(target)
+        cached_image = self._get_cached_render(cache_key)
+        if cached_image:
+            yield event.image_result(cached_image)
+            return
+
         current = await self._sample_and_store(target)
         rows = await self.store.load_history(
             target.scope_id,
@@ -1125,6 +1198,7 @@ class MinecraftMotdPlugin(Star):
                     "scale": "device",
                 },
             )
+            self._set_cached_render(cache_key, url)
             yield event.image_result(url)
         except Exception as exc:
             logger.exception(f"[{PLUGIN_NAME}] render status image failed: {exc}")

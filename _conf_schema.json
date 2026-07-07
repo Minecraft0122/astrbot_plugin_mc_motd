@@ -35,6 +35,30 @@
     "hint": "4",
     "default": 4
   },
+  "render_cache_seconds": {
+    "description": "同一群/会话状态图的渲染缓存秒数。缓存期内重复 /motd 会直接返回上一张图，不重新查询和渲染。设为 0 可关闭",
+    "type": "int",
+    "hint": "45",
+    "default": 45
+  },
+  "background_image_url": {
+    "description": "状态图背景图片 URL。留空可禁用远程背景图以加快首次渲染",
+    "type": "string",
+    "hint": "https://api.imlazy.ink/img",
+    "default": "https://api.imlazy.ink/img"
+  },
+  "background_opacity": {
+    "description": "背景图片透明度，0-1",
+    "type": "float",
+    "hint": "0.46",
+    "default": 0.46
+  },
+  "background_overlay_opacity": {
+    "description": "背景遮罩透明度，0-1。越大背景越暗，文字越清晰",
+    "type": "float",
+    "hint": "0.54",
+    "default": 0.54
+  },
   "enable_group_whitelist": {
     "description": "是否启用群白名单。启用后，只有 group_whitelist 或 group_servers_json 中列出的群可以使用 /motd",
     "type": "bool",
