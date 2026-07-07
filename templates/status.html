@@ -22,17 +22,39 @@
     }
 
     .card {
+      position: relative;
       width: 790px;
       height: 500px;
       padding: 14px 16px 12px;
-      background: #1a2027;
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      background: #222b34;
+      border: 1px solid rgba(255, 255, 255, 0.10);
       border-radius: 6px;
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
       overflow: hidden;
     }
 
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background-image: url("https://api.imlazy.ink/img");
+      background-size: cover;
+      background-position: center;
+      opacity: 0.30;
+    }
+
+    .card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      background: rgba(30, 39, 48, 0.68);
+    }
+
     .top {
+      position: relative;
+      z-index: 2;
       display: grid;
       grid-template-columns: 100px 1fr auto;
       gap: 12px;
@@ -43,7 +65,7 @@
     .icon {
       width: 100px;
       height: 100px;
-      background: #252d36;
+      background: rgba(45, 57, 68, 0.82);
       overflow: hidden;
       flex: 0 0 auto;
     }
@@ -75,6 +97,7 @@
       font-size: 29px;
       line-height: 1.12;
       font-weight: 500;
+      color: #ffffff;
       letter-spacing: 0;
       white-space: nowrap;
       overflow: hidden;
@@ -83,8 +106,8 @@
 
     .motd {
       margin-top: 8px;
-      height: 58px;
-      color: #d8e6f7;
+      height: 76px;
+      color: #edf6ff;
       font-size: 23px;
       line-height: 1.26;
       white-space: pre-wrap;
@@ -101,19 +124,9 @@
       color: #ffb8b8;
     }
 
-    .address {
-      margin-top: 5px;
-      color: #b8bec8;
-      font-size: 18px;
-      line-height: 1.1;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
     .online {
       padding-top: 7px;
-      color: #b9bec7;
+      color: #dce2ec;
       font-size: 28px;
       line-height: 1;
       font-weight: 500;
@@ -123,6 +136,7 @@
 
     .chart {
       position: relative;
+      z-index: 2;
       height: 350px;
       margin-top: 0;
       overflow: hidden;
@@ -138,7 +152,7 @@
       position: absolute;
       right: 4px;
       bottom: 0;
-      color: rgba(186, 193, 203, 0.72);
+      color: rgba(224, 230, 238, 0.78);
       font-size: 12px;
     }
   </style>
@@ -157,7 +171,6 @@
       <div class="main">
         <div class="name">{{ server_name }}</div>
         <div class="motd">{% if current.ok %}{{ current.motd_plain }}{% else %}<span class="error">{{ current.error }}</span>{% endif %}</div>
-        <div class="address">{{ host }}:{{ port }}</div>
       </div>
 
       <div class="online">
@@ -173,24 +186,24 @@
             <stop offset="100%" stop-color="#6dff7b" stop-opacity="0.06"/>
           </linearGradient>
         </defs>
-        <line x1="38" y1="18" x2="38" y2="296" stroke="#f2f6fb" stroke-width="2"/>
-        <line x1="38" y1="296" x2="742" y2="296" stroke="#f2f6fb" stroke-width="2"/>
+        <line x1="38" y1="18" x2="38" y2="296" stroke="#ffffff" stroke-width="2"/>
+        <line x1="38" y1="296" x2="742" y2="296" stroke="#ffffff" stroke-width="2"/>
 
-        <text x="0" y="26" fill="#aeb5bf" font-size="24">{{ y_max }}</text>
-        <text x="8" y="162" fill="#aeb5bf" font-size="24">{{ y_mid }}</text>
-        <text x="14" y="299" fill="#aeb5bf" font-size="24">0</text>
+        <text x="0" y="26" fill="#d2d8e2" font-size="24">{{ y_max }}</text>
+        <text x="8" y="162" fill="#d2d8e2" font-size="24">{{ y_mid }}</text>
+        <text x="14" y="299" fill="#d2d8e2" font-size="24">0</text>
 
-        <text x="2" y="335" fill="#aeb5bf" font-size="25">{{ x_start_label }}</text>
-        <text x="170" y="335" fill="#aeb5bf" font-size="25">{{ x_q1_label }}</text>
-        <text x="336" y="335" fill="#aeb5bf" font-size="25">{{ x_mid_label }}</text>
-        <text x="508" y="335" fill="#aeb5bf" font-size="25">{{ x_q3_label }}</text>
-        <text x="666" y="335" fill="#aeb5bf" font-size="25">{{ x_end_label }}</text>
+        <text x="2" y="335" fill="#d2d8e2" font-size="25">{{ x_start_label }}</text>
+        <text x="170" y="335" fill="#d2d8e2" font-size="25">{{ x_q1_label }}</text>
+        <text x="336" y="335" fill="#d2d8e2" font-size="25">{{ x_mid_label }}</text>
+        <text x="508" y="335" fill="#d2d8e2" font-size="25">{{ x_q3_label }}</text>
+        <text x="666" y="335" fill="#d2d8e2" font-size="25">{{ x_end_label }}</text>
 
         {% if area_points %}
         <polygon points="{{ area_points }}" fill="url(#lineGlow)"/>
         <polyline points="{{ line_points }}" fill="none" stroke="#58f15f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
         {% else %}
-        <text x="312" y="160" fill="#aeb5bf" font-size="22">暂无历史在线人数</text>
+        <text x="312" y="160" fill="#d2d8e2" font-size="22">暂无历史在线人数</text>
         {% endif %}
       </svg>
       <div class="footer">{{ scope_label }} · {{ current.sampled_at_text }}</div>
