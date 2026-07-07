@@ -25,6 +25,42 @@ except Exception:
 PLUGIN_NAME = "astrbot_plugin_mc_motd"
 COLOR_CODE_RE = re.compile(r"§.")
 DISPLAY_TZ = timezone(timedelta(hours=8), "Asia/Shanghai")
+MINECRAFT_COLOR_CODES = {
+    "0": "#000000",
+    "1": "#0000aa",
+    "2": "#00aa00",
+    "3": "#00aaaa",
+    "4": "#aa0000",
+    "5": "#aa00aa",
+    "6": "#ffaa00",
+    "7": "#aaaaaa",
+    "8": "#555555",
+    "9": "#5555ff",
+    "a": "#55ff55",
+    "b": "#55ffff",
+    "c": "#ff5555",
+    "d": "#ff55ff",
+    "e": "#ffff55",
+    "f": "#ffffff",
+}
+MINECRAFT_NAMED_COLORS = {
+    "black": "#000000",
+    "dark_blue": "#0000aa",
+    "dark_green": "#00aa00",
+    "dark_aqua": "#00aaaa",
+    "dark_red": "#aa0000",
+    "dark_purple": "#aa00aa",
+    "gold": "#ffaa00",
+    "gray": "#aaaaaa",
+    "dark_gray": "#555555",
+    "blue": "#5555ff",
+    "green": "#55ff55",
+    "aqua": "#55ffff",
+    "red": "#ff5555",
+    "light_purple": "#ff55ff",
+    "yellow": "#ffff55",
+    "white": "#ffffff",
+}
 
 
 @dataclass
@@ -354,6 +390,120 @@ def clean_motd(value: Any) -> str:
     return text.strip() or "Minecraft Server"
 
 
+def safe_minecraft_color(value: Any) -> str:
+    color = str(value or "").strip().lower()
+    if color in MINECRAFT_NAMED_COLORS:
+        return MINECRAFT_NAMED_COLORS[color]
+    if re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+        return color
+    return ""
+
+
+def style_from_state(state: Dict[str, Any]) -> str:
+    styles: List[str] = []
+    color = safe_minecraft_color(state.get("color"))
+    if color:
+        styles.append(f"color:{color}")
+    if state.get("bold"):
+        styles.append("font-weight:700")
+    if state.get("italic"):
+        styles.append("font-style:italic")
+    decorations = []
+    if state.get("underlined"):
+        decorations.append("underline")
+    if state.get("strikethrough"):
+        decorations.append("line-through")
+    if decorations:
+        styles.append(f"text-decoration:{' '.join(decorations)}")
+    return ";".join(styles)
+
+
+def wrap_styled_text(text: str, state: Dict[str, Any]) -> str:
+    if not text:
+        return ""
+    escaped = html.escape(text, quote=True)
+    style = style_from_state(state)
+    if not style:
+        return escaped
+    return f'<span style="{style}">{escaped}</span>'
+
+
+def legacy_text_to_html(text: str, inherited_state: Optional[Dict[str, Any]] = None) -> str:
+    state: Dict[str, Any] = dict(inherited_state or {})
+    chunks: List[str] = []
+    buffer: List[str] = []
+    i = 0
+
+    def flush() -> None:
+        if buffer:
+            chunks.append(wrap_styled_text("".join(buffer), state))
+            buffer.clear()
+
+    while i < len(text):
+        char = text[i]
+        if char == "§" and i + 1 < len(text):
+            code = text[i + 1].lower()
+            flush()
+            if code in MINECRAFT_COLOR_CODES:
+                state = {"color": MINECRAFT_COLOR_CODES[code]}
+            elif code == "l":
+                state["bold"] = True
+            elif code == "o":
+                state["italic"] = True
+            elif code == "n":
+                state["underlined"] = True
+            elif code == "m":
+                state["strikethrough"] = True
+            elif code == "r":
+                state = dict(inherited_state or {})
+            i += 2
+            continue
+        buffer.append(char)
+        i += 1
+    flush()
+    return "".join(chunks)
+
+
+def component_to_html(value: Any, inherited_state: Optional[Dict[str, Any]] = None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return legacy_text_to_html(value, inherited_state)
+    if isinstance(value, list):
+        return "".join(component_to_html(item, inherited_state) for item in value)
+    if isinstance(value, dict):
+        state: Dict[str, Any] = dict(inherited_state or {})
+        if "color" in value:
+            color = safe_minecraft_color(value.get("color"))
+            if color:
+                state["color"] = color
+        for source_key, target_key in (
+            ("bold", "bold"),
+            ("italic", "italic"),
+            ("underlined", "underlined"),
+            ("strikethrough", "strikethrough"),
+        ):
+            if source_key in value and isinstance(value[source_key], bool):
+                state[target_key] = value[source_key]
+
+        pieces: List[str] = []
+        if "text" in value:
+            pieces.append(legacy_text_to_html(str(value.get("text") or ""), state))
+        elif "translate" in value:
+            pieces.append(wrap_styled_text(str(value.get("translate") or ""), state))
+        for item in value.get("with", []) or []:
+            pieces.append(component_to_html(item, state))
+        for item in value.get("extra", []) or []:
+            pieces.append(component_to_html(item, state))
+        return "".join(pieces)
+    return legacy_text_to_html(str(value), inherited_state)
+
+
+def motd_to_html(value: Any) -> str:
+    rendered = component_to_html(value)
+    return rendered.strip() or html.escape("Minecraft Server", quote=True)
+
+
 def safe_favicon(value: Any) -> Optional[str]:
     if not isinstance(value, str):
         return None
@@ -530,7 +680,7 @@ def build_chart(
     if current.ok and current.online is not None:
         peak_online = max(peak_online, current.online)
 
-    y_max = max(peak_online, 1)
+    y_max = max(1, math.ceil(max(peak_online, 1) * 1.2))
     y_mid = max(1, round(y_max / 2))
 
     plot_left = 38
@@ -903,6 +1053,11 @@ class MinecraftMotdPlugin(Star):
             "online": current.online,
             "max_players": current.max_players,
             "motd_plain": self._safe_text(current.motd_plain),
+            "motd_html": motd_to_html(
+                (current.raw_json or {}).get("description")
+                if current.raw_json
+                else current.motd_plain
+            ),
             "favicon": current.favicon,
             "error": self._safe_text(current.error or "服务器未响应"),
             "sampled_at_text": format_ts(current.sampled_at),
