@@ -1,0 +1,68 @@
+{
+  "server_name": {
+    "description": "图片中展示的服务器名称",
+    "type": "string",
+    "hint": "Minecraft Server",
+    "default": "Minecraft Server"
+  },
+  "host": {
+    "description": "Minecraft Java 服务器地址。本机服一般填 127.0.0.1",
+    "type": "string",
+    "hint": "127.0.0.1",
+    "default": "127.0.0.1"
+  },
+  "port": {
+    "description": "Minecraft Java 服务器端口",
+    "type": "int",
+    "hint": "25565",
+    "default": 25565
+  },
+  "protocol_version": {
+    "description": "状态握手使用的 Minecraft Java 协议版本。只用于 status 查询，通常保持默认即可",
+    "type": "int",
+    "hint": "760",
+    "default": 760
+  },
+  "query_interval_seconds": {
+    "description": "后台采样间隔，单位秒",
+    "type": "int",
+    "hint": "300",
+    "default": 300
+  },
+  "max_parallel_queries": {
+    "description": "后台同时查询多少个群配置的服务器",
+    "type": "int",
+    "hint": "4",
+    "default": 4
+  },
+  "allow_member_set_server": {
+    "description": "是否允许普通群成员使用 /setmotd 和 /clearmotd 修改本群查询地址。关闭后仅管理员可修改",
+    "type": "bool",
+    "hint": "true",
+    "default": true
+  },
+  "timeout_seconds": {
+    "description": "连接/读取超时时间，单位秒",
+    "type": "float",
+    "hint": "3.0",
+    "default": 3.0
+  },
+  "chart_hours": {
+    "description": "状态图默认展示最近多少小时的历史人数",
+    "type": "int",
+    "hint": "24",
+    "default": 24
+  },
+  "retention_days": {
+    "description": "历史采样保留天数",
+    "type": "int",
+    "hint": "30",
+    "default": 30
+  },
+  "max_chart_points": {
+    "description": "渲染曲线时最多使用多少个采样点，过多会自动抽稀",
+    "type": "int",
+    "hint": "180",
+    "default": 180
+  }
+}
