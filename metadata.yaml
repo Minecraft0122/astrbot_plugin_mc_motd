@@ -1,5 +1,5 @@
 name: astrbot_plugin_mc_motd
 desc: Periodically fetch a local Minecraft Java server MOTD, keep online-player history, and render a status image.
-version: v1.3.0
+version: v1.3.1
 author: Codex
 repo: "https://github.com/Minecraft0122/astrbot_plugin_mc_motd"

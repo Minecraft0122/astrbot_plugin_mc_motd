@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import html
 import json
 import math
+import mimetypes
 import re
 import sqlite3
 import struct
 import time
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -23,6 +26,7 @@ except Exception:
 
 
 PLUGIN_NAME = "astrbot_plugin_mc_motd"
+RENDER_CACHE_VERSION = "3"
 COLOR_CODE_RE = re.compile(r"§.")
 DISPLAY_TZ = timezone(timedelta(hours=8), "Asia/Shanghai")
 MINECRAFT_COLOR_CODES = {
@@ -93,6 +97,13 @@ class ServerTarget:
 @dataclass
 class RenderCacheEntry:
     created_at: float
+    image_url: str
+
+
+@dataclass
+class BackgroundCacheEntry:
+    created_at: float
+    source_url: str
     image_url: str
 
 
@@ -299,6 +310,31 @@ class HistoryStore:
                         (scope_id, host, port, cutoff),
                     )
                 )
+
+    async def latest_status(
+        self,
+        scope_id: str,
+        host: str,
+        port: int,
+        max_age_seconds: int,
+    ) -> Optional[sqlite3.Row]:
+        cutoff = time.time() - max(0, max_age_seconds)
+        async with self._lock:
+            with self._connect() as conn:
+                return conn.execute(
+                    """
+                    SELECT sampled_at, success, online, max_players, motd,
+                           version_name, latency_ms, error, raw_json
+                    FROM samples
+                    WHERE scope_id = ?
+                      AND server_host = ?
+                      AND server_port = ?
+                      AND sampled_at >= ?
+                    ORDER BY sampled_at DESC
+                    LIMIT 1
+                    """,
+                    (scope_id, host, port, cutoff),
+                ).fetchone()
 
     async def clear(self, scope_id: str) -> None:
         async with self._lock:
@@ -518,6 +554,26 @@ def safe_favicon(value: Any) -> Optional[str]:
     return None
 
 
+def fetch_image_data_uri(url: str, timeout: float, max_bytes: int) -> str:
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": f"{PLUGIN_NAME}/1.0"},
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        content_type = response.headers.get_content_type()
+        data = response.read(max_bytes + 1)
+        if len(data) > max_bytes:
+            raise ValueError("背景图超过大小限制")
+        if not content_type.startswith("image/"):
+            guessed = mimetypes.guess_type(response.geturl())[0]
+            if guessed and guessed.startswith("image/"):
+                content_type = guessed
+            else:
+                raise ValueError(f"背景地址返回的不是图片: {content_type}")
+    encoded = base64.b64encode(data).decode("ascii")
+    return f"data:{content_type};base64,{encoded}"
+
+
 def parse_server_address(address: str, default_port: int) -> Tuple[str, int]:
     value = address.strip()
     if not value:
@@ -583,11 +639,35 @@ def row_to_target(row: sqlite3.Row, configured: bool = True) -> ServerTarget:
     )
 
 
+def row_to_status(row: sqlite3.Row, target: ServerTarget) -> MinecraftStatus:
+    raw_json = None
+    raw_text = row["raw_json"] if "raw_json" in row.keys() else None
+    if raw_text:
+        try:
+            raw_json = json.loads(str(raw_text))
+        except Exception:
+            raw_json = None
+    return MinecraftStatus(
+        ok=bool(row["success"]),
+        sampled_at=float(row["sampled_at"]),
+        host=target.host,
+        port=target.port,
+        online=int(row["online"]) if row["online"] is not None else None,
+        max_players=int(row["max_players"]) if row["max_players"] is not None else None,
+        motd_plain=str(row["motd"] or ""),
+        version_name=str(row["version_name"] or ""),
+        latency_ms=int(row["latency_ms"]) if row["latency_ms"] is not None else None,
+        error=str(row["error"] or ""),
+        raw_json=raw_json,
+    )
+
+
 async def query_minecraft_status(
     host: str,
     port: int,
     timeout: float,
     protocol_version: int,
+    send_latency_ping: bool = False,
 ) -> MinecraftStatus:
     sampled_at = time.time()
     started = time.perf_counter()
@@ -617,15 +697,18 @@ async def query_minecraft_status(
         status_json = json.loads(response_text)
 
         latency_ms: Optional[int] = None
-        try:
-            ping_started = time.perf_counter()
-            writer.write(pack_packet(1, struct.pack(">q", int(time.time() * 1000))))
-            await asyncio.wait_for(writer.drain(), timeout=timeout)
-            pong_id, _ = await asyncio.wait_for(read_packet(reader), timeout=timeout)
-            if pong_id == 1:
-                latency_ms = max(0, round((time.perf_counter() - ping_started) * 1000))
-        except Exception:
-            latency_ms = max(0, round((time.perf_counter() - started) * 1000))
+        if send_latency_ping:
+            try:
+                ping_started = time.perf_counter()
+                writer.write(pack_packet(1, struct.pack(">q", int(time.time() * 1000))))
+                await asyncio.wait_for(writer.drain(), timeout=timeout)
+                pong_id, _ = await asyncio.wait_for(read_packet(reader), timeout=timeout)
+                if pong_id == 1:
+                    latency_ms = max(
+                        0, round((time.perf_counter() - ping_started) * 1000)
+                    )
+            except Exception:
+                latency_ms = max(0, round((time.perf_counter() - started) * 1000))
 
         players = status_json.get("players") or {}
         version = status_json.get("version") or {}
@@ -673,10 +756,37 @@ def downsample_rows(rows: List[sqlite3.Row], limit: int) -> List[sqlite3.Row]:
     return picked
 
 
+def build_y_ticks(
+    y_max: int,
+    plot_top: int,
+    plot_bottom: int,
+) -> List[Dict[str, str]]:
+    height = plot_bottom - plot_top
+    ticks: List[Dict[str, str]] = [
+        {"label": str(y_max), "y": str(plot_top + 8)}
+    ]
+
+    if y_max > 5:
+        step = max(5, int(math.ceil((y_max / 4) / 5) * 5))
+        values = []
+        for value in range(step, y_max, step):
+            y = plot_bottom - (value / y_max) * height
+            if plot_top + 46 <= y <= plot_bottom - 28:
+                values.append(value)
+        for value in reversed(values):
+            y = plot_bottom - (value / y_max) * height
+            ticks.append({"label": str(value), "y": f"{y + 8:.1f}"})
+
+    ticks.append({"label": "0", "y": str(plot_bottom + 3)})
+    return ticks
+
+
 def build_chart(
     rows: List[sqlite3.Row],
     current: MinecraftStatus,
     max_points: int,
+    start_ts: float,
+    end_ts: float,
 ) -> Dict[str, Any]:
     successful = [row for row in rows if row["success"] and row["online"] is not None]
     sampled = downsample_rows(successful, max(20, max_points))
@@ -687,7 +797,6 @@ def build_chart(
         peak_online = max(peak_online, current.online)
 
     y_max = max(1, math.ceil(max(peak_online, 1) * 1.2))
-    y_mid = max(1, round(y_max / 2))
 
     plot_left = 38
     plot_right = 742
@@ -695,22 +804,15 @@ def build_chart(
     plot_bottom = 296
     width = plot_right - plot_left
     height = plot_bottom - plot_top
+    span = max(end_ts - start_ts, 1)
 
     line_points = ""
     area_points = ""
     if sampled:
-        if len(sampled) == 1:
-            xs = [plot_right]
-        else:
-            first_ts = float(sampled[0]["sampled_at"])
-            last_ts = float(sampled[-1]["sampled_at"])
-            span = max(last_ts - first_ts, 1)
-            xs = [
-                plot_left + (float(row["sampled_at"]) - first_ts) / span * width
-                for row in sampled
-            ]
         points: List[str] = []
-        for x, row in zip(xs, sampled):
+        for row in sampled:
+            x = plot_left + (float(row["sampled_at"]) - start_ts) / span * width
+            x = min(plot_right, max(plot_left, x))
             online = max(0, int(row["online"]))
             y = plot_bottom - (online / y_max) * height
             points.append(f"{x:.1f},{y:.1f}")
@@ -721,7 +823,7 @@ def build_chart(
         "line_points": line_points,
         "area_points": area_points,
         "y_max": y_max,
-        "y_mid": y_mid,
+        "y_ticks": build_y_ticks(y_max, plot_top, plot_bottom),
         "peak_online": peak_online,
         "sample_count": len(successful),
     }
@@ -729,6 +831,29 @@ def build_chart(
 
 def format_ts(ts: float, pattern: str = "%Y-%m-%d %H:%M:%S") -> str:
     return datetime.fromtimestamp(ts, DISPLAY_TZ).strftime(pattern)
+
+
+def build_x_ticks(start_ts: float, end_ts: float) -> List[Dict[str, str]]:
+    positions = [
+        (0.0, 38, "start"),
+        (0.25, 214, "middle"),
+        (0.5, 390, "middle"),
+        (0.75, 566, "middle"),
+        (1.0, 742, "end"),
+    ]
+    span = max(end_ts - start_ts, 1)
+    ticks: List[Dict[str, str]] = []
+    for ratio, x, anchor in positions:
+        ts = start_ts + span * ratio
+        ticks.append(
+            {
+                "x": str(x),
+                "anchor": anchor,
+                "date": format_ts(ts, "%m-%d"),
+                "time": format_ts(ts, "%H:%M"),
+            }
+        )
+    return ticks
 
 
 class MinecraftMotdPlugin(Star):
@@ -745,6 +870,8 @@ class MinecraftMotdPlugin(Star):
         )
         self._collector_task: Optional[asyncio.Task[None]] = None
         self._render_cache: Dict[str, RenderCacheEntry] = {}
+        self._query_locks: Dict[str, asyncio.Lock] = {}
+        self._background_cache: Optional[BackgroundCacheEntry] = None
 
     async def initialize(self) -> None:
         await self._ensure_collector()
@@ -807,6 +934,15 @@ class MinecraftMotdPlugin(Star):
     def _render_cache_seconds(self) -> int:
         return max(0, int(self._cfg("render_cache_seconds", 45)))
 
+    def _sample_reuse_seconds(self) -> int:
+        return max(0, int(self._cfg("sample_reuse_seconds", 30)))
+
+    def _send_latency_ping(self) -> bool:
+        value = self._cfg("send_latency_ping", False)
+        if isinstance(value, bool):
+            return value
+        return str(value).lower() in {"1", "true", "yes", "on"}
+
     def _background_image_url(self) -> str:
         value = str(self._cfg("background_image_url", "https://api.imlazy.ink/img")).strip()
         if not value:
@@ -824,6 +960,15 @@ class MinecraftMotdPlugin(Star):
 
     def _background_overlay_opacity(self) -> float:
         return min(1.0, max(0.0, float(self._cfg("background_overlay_opacity", 0.54))))
+
+    def _background_cache_seconds(self) -> int:
+        return max(0, int(self._cfg("background_cache_seconds", 3600)))
+
+    def _background_fetch_timeout(self) -> float:
+        return max(0.2, float(self._cfg("background_fetch_timeout_seconds", 1.5)))
+
+    def _background_max_bytes(self) -> int:
+        return max(128 * 1024, int(self._cfg("background_max_bytes", 3 * 1024 * 1024)))
 
     def _allow_member_set_server(self) -> bool:
         value = self._cfg("allow_member_set_server", False)
@@ -1040,7 +1185,7 @@ class MinecraftMotdPlugin(Star):
         sem: asyncio.Semaphore,
     ) -> None:
         async with sem:
-            status = await self._sample_and_store(target)
+            status = await self._current_status(target, allow_reuse=True)
             if status.ok:
                 logger.info(
                     f"[{PLUGIN_NAME}] {target.scope_label} {status.host}:{status.port} "
@@ -1058,24 +1203,111 @@ class MinecraftMotdPlugin(Star):
             port=target.port,
             timeout=self._timeout(),
             protocol_version=self._protocol_version(),
+            send_latency_ping=self._send_latency_ping(),
         )
         await self.store.add_sample(target.scope_id, status)
         cutoff = time.time() - self._retention_days() * 86400
         await self.store.purge_older_than(cutoff)
         return status
 
+    def _query_key(self, target: ServerTarget) -> str:
+        return f"{target.scope_id}|{target.host}|{target.port}"
+
+    async def _latest_stored_status(
+        self,
+        target: ServerTarget,
+        max_age_seconds: int,
+    ) -> Optional[MinecraftStatus]:
+        if max_age_seconds <= 0:
+            return None
+        row = await self.store.latest_status(
+            target.scope_id,
+            target.host,
+            target.port,
+            max_age_seconds,
+        )
+        if row is None:
+            return None
+        return row_to_status(row, target)
+
+    async def _current_status(
+        self,
+        target: ServerTarget,
+        allow_reuse: bool = True,
+    ) -> MinecraftStatus:
+        max_age = self._sample_reuse_seconds() if allow_reuse else 0
+        latest = await self._latest_stored_status(target, max_age)
+        if latest is not None:
+            return latest
+
+        key = self._query_key(target)
+        lock = self._query_locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._query_locks[key] = lock
+
+        async with lock:
+            latest = await self._latest_stored_status(target, max_age)
+            if latest is not None:
+                return latest
+            return await self._sample_and_store(target)
+
+    async def _background_image_for_render(self) -> str:
+        url = self._background_image_url()
+        if not url:
+            return ""
+        ttl = self._background_cache_seconds()
+        if ttl <= 0:
+            return url
+
+        now = time.time()
+        cache = self._background_cache
+        if (
+            cache is not None
+            and cache.source_url == url
+            and now - cache.created_at <= ttl
+        ):
+            return cache.image_url
+
+        timeout = self._background_fetch_timeout()
+        try:
+            image_url = await asyncio.wait_for(
+                asyncio.to_thread(
+                    fetch_image_data_uri,
+                    url,
+                    timeout,
+                    self._background_max_bytes(),
+                ),
+                timeout=timeout + 0.5,
+            )
+        except Exception as exc:
+            if cache is not None and cache.source_url == url:
+                logger.warning(
+                    f"[{PLUGIN_NAME}] 背景图刷新失败，继续使用旧缓存: {exc}"
+                )
+                return cache.image_url
+            logger.warning(f"[{PLUGIN_NAME}] 背景图获取失败，本次使用纯色背景: {exc}")
+            return ""
+
+        self._background_cache = BackgroundCacheEntry(
+            created_at=now,
+            source_url=url,
+            image_url=image_url,
+        )
+        return image_url
+
     def _safe_text(self, value: Any) -> str:
         return html.escape(str(value or ""), quote=True)
 
-    def _template_data(
+    async def _template_data(
         self,
         target: ServerTarget,
         current: MinecraftStatus,
         rows: List[sqlite3.Row],
     ) -> Dict[str, Any]:
-        chart = build_chart(rows, current, self._max_chart_points())
-        start_ts = time.time() - self._chart_hours() * 3600
-        end_ts = time.time()
+        end_ts = current.sampled_at
+        start_ts = end_ts - self._chart_hours() * 3600
+        chart = build_chart(rows, current, self._max_chart_points(), start_ts, end_ts)
         current_view = {
             "ok": current.ok,
             "online": current.online,
@@ -1098,12 +1330,10 @@ class MinecraftMotdPlugin(Star):
             "current": current_view,
             "chart_hours": self._chart_hours(),
             "retention_days": self._retention_days(),
-            "x_start_label": format_ts(start_ts, "%H:%M"),
-            "x_q1_label": format_ts(start_ts + (end_ts - start_ts) * 0.25, "%H:%M"),
-            "x_mid_label": format_ts(start_ts + (end_ts - start_ts) * 0.5, "%H:%M"),
-            "x_q3_label": format_ts(start_ts + (end_ts - start_ts) * 0.75, "%H:%M"),
-            "x_end_label": format_ts(end_ts, "%H:%M"),
-            "background_image_url": self._safe_text(self._background_image_url()),
+            "x_ticks": build_x_ticks(start_ts, end_ts),
+            "background_image_url": self._safe_text(
+                await self._background_image_for_render()
+            ),
             "background_opacity": f"{self._background_opacity():.2f}",
             "background_overlay_opacity": f"{self._background_overlay_opacity():.2f}",
             **chart,
@@ -1112,6 +1342,7 @@ class MinecraftMotdPlugin(Star):
     def _render_cache_key(self, target: ServerTarget) -> str:
         return "|".join(
             [
+                RENDER_CACHE_VERSION,
                 target.scope_id,
                 target.host,
                 str(target.port),
@@ -1178,14 +1409,14 @@ class MinecraftMotdPlugin(Star):
             yield event.image_result(cached_image)
             return
 
-        current = await self._sample_and_store(target)
+        current = await self._current_status(target, allow_reuse=True)
         rows = await self.store.load_history(
             target.scope_id,
             target.host,
             target.port,
             self._chart_hours(),
         )
-        data = self._template_data(target, current, rows)
+        data = await self._template_data(target, current, rows)
         try:
             url = await self.html_render(
                 self.template,
@@ -1244,7 +1475,7 @@ class MinecraftMotdPlugin(Star):
             configured=True,
         )
         await self.store.upsert_server(target)
-        current = await self._sample_and_store(target)
+        current = await self._current_status(target, allow_reuse=False)
         result = (
             f"已为{scope_label}绑定 Minecraft 查询地址：{display_name} "
             f"({host}:{port})"

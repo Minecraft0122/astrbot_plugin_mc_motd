@@ -23,6 +23,12 @@
     "hint": "760",
     "default": 760
   },
+  "send_latency_ping": {
+    "description": "是否在 status 查询后额外发送 Minecraft latency ping 包。当前图片不显示延迟，默认关闭以减少服务器收到的 ping 请求",
+    "type": "bool",
+    "hint": "false",
+    "default": false
+  },
   "query_interval_seconds": {
     "description": "后台采样间隔，单位秒",
     "type": "int",
@@ -41,6 +47,12 @@
     "hint": "45",
     "default": 45
   },
+  "sample_reuse_seconds": {
+    "description": "/motd 和后台采样可复用最近一次查询结果的秒数，用于避免短时间内重复 ping 同一服务器。设为 0 可关闭复用",
+    "type": "int",
+    "hint": "30",
+    "default": 30
+  },
   "background_image_url": {
     "description": "状态图背景图片 URL。留空可禁用远程背景图以加快首次渲染",
     "type": "string",
@@ -58,6 +70,24 @@
     "type": "float",
     "hint": "0.54",
     "default": 0.54
+  },
+  "background_cache_seconds": {
+    "description": "远程背景图内存缓存秒数。缓存后渲染会使用本地 data URI，减少远程图片导致的慢渲染。设为 0 则每次交给浏览器远程加载",
+    "type": "int",
+    "hint": "3600",
+    "default": 3600
+  },
+  "background_fetch_timeout_seconds": {
+    "description": "插件预取远程背景图的超时时间，单位秒。超时后本次使用纯色背景或旧缓存",
+    "type": "float",
+    "hint": "1.5",
+    "default": 1.5
+  },
+  "background_max_bytes": {
+    "description": "远程背景图最大缓存大小，单位字节。过大的图片会被忽略以避免渲染变慢",
+    "type": "int",
+    "hint": "3145728",
+    "default": 3145728
   },
   "enable_group_whitelist": {
     "description": "是否启用群白名单。启用后，只有 group_whitelist 或 group_servers_json 中列出的群可以使用 /motd",
