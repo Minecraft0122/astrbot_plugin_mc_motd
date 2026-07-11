@@ -26,7 +26,6 @@ except Exception:
 
 
 PLUGIN_NAME = "SimpMC-Motd"
-DATA_DIR_NAME = "astrbot_plugin_mc_motd"
 RENDER_CACHE_VERSION = "4"
 COLOR_CODE_RE = re.compile(r"§.")
 DISPLAY_TZ = timezone(timedelta(hours=8), "Asia/Shanghai")
@@ -858,7 +857,7 @@ class MinecraftMotdPlugin(Star):
         super().__init__(context, config)
         self.config = config
         if get_astrbot_data_path is not None:
-            plugin_data_path = Path(get_astrbot_data_path()) / "plugin_data" / DATA_DIR_NAME
+            plugin_data_path = Path(get_astrbot_data_path()) / "plugin_data" / PLUGIN_NAME
         else:
             plugin_data_path = Path(__file__).parent / "data"
         self.store = HistoryStore(plugin_data_path / "history.sqlite3")

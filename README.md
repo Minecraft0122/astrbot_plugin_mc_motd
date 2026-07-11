@@ -95,4 +95,4 @@ group:987654321
 
 状态图的 X 轴会按真实采样时间窗口显示时间，不额外标注日期；Y 轴顶部人数按历史在线人数最大值计算，除顶部最大值外，所有可见刻度都会使用 5 的倍数。
 
-后台采样数据会保存在 AstrBot 数据目录的 `plugin_data/astrbot_plugin_mc_motd/history.sqlite3`。这个目录名会保持兼容旧版本，避免升级后丢失历史记录。插件会按 `group:群号` 隔离群配置和历史；私聊会按私聊会话单独保存。
+后台采样数据会保存在 AstrBot 数据目录的 `plugin_data/SimpMC-Motd/history.sqlite3`。插件会按 `group:群号` 隔离群配置和历史；私聊会按私聊会话单独保存。
