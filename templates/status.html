@@ -38,7 +38,7 @@
       position: absolute;
       inset: 0;
       z-index: 0;
-      background-image: {% if background_image_url %}url("{{ background_image_url }}"){% else %}none{% endif %};
+      background-image: {% if background_image_url %}url("{{ background_image_url | safe }}"){% else %}none{% endif %};
       background-size: cover;
       background-position: center;
       opacity: {{ background_opacity }};
@@ -194,8 +194,7 @@
         {% endfor %}
 
         {% for tick in x_ticks %}
-        <text x="{{ tick.x }}" y="323" text-anchor="{{ tick.anchor }}" fill="#d2d8e2" font-size="16">{{ tick.date }}</text>
-        <text x="{{ tick.x }}" y="346" text-anchor="{{ tick.anchor }}" fill="#d2d8e2" font-size="21">{{ tick.time }}</text>
+        <text x="{{ tick.x }}" y="335" text-anchor="{{ tick.anchor }}" fill="#d2d8e2" font-size="25">{{ tick.time }}</text>
         {% endfor %}
 
         {% if area_points %}

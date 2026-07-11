@@ -87,12 +87,12 @@ group:987654321
 
 `/motd` 和后台采样默认会复用最近 `30` 秒的状态，避免短时间内重复 ping 同一服务器。可以通过 `sample_reuse_seconds` 调整，设为 `0` 可关闭复用。插件默认不会发送 Minecraft 协议里的额外 latency ping 包；如果确实需要记录延迟，可以把 `send_latency_ping` 设为 `true`。
 
-图片通过 AstrBot 的 HTML 渲染能力生成 PNG，本质上会启动/调用浏览器渲染模板并截图。远程背景图和远程资源会影响首次渲染速度；插件默认会把远程背景缓存 `3600` 秒，后续渲染使用本地 data URI。可以通过 `background_cache_seconds`、`background_fetch_timeout_seconds` 和 `background_max_bytes` 调整；如果你更在意速度，可以把 `background_image_url` 留空，状态图会使用纯色背景。
+图片通过 AstrBot 的 HTML 渲染能力生成 PNG，本质上会启动/调用浏览器渲染模板并截图。远程背景图和远程资源会影响首次渲染速度；插件默认会把远程背景缓存 `3600` 秒，后续渲染使用本地 data URI。预取失败时会继续让浏览器加载原始背景 URL，避免背景直接消失。可以通过 `background_cache_seconds`、`background_fetch_timeout_seconds` 和 `background_max_bytes` 调整；如果你更在意速度，可以把 `background_image_url` 留空，状态图会使用纯色背景。
 
 状态图会尽量保留 Minecraft MOTD 中的 JSON 颜色和 `§` 颜色码。
 
 状态图中的时间轴和最后采样时间固定使用 `UTC+8 / Asia/Shanghai` 显示，不跟随服务器系统时区。
 
-状态图的 X 轴会按真实采样时间窗口显示日期和时间；Y 轴除顶部最大值外，所有可见刻度都会使用 5 的倍数。
+状态图的 X 轴会按真实采样时间窗口显示时间，不额外标注日期；Y 轴顶部人数按历史在线人数最大值计算，除顶部最大值外，所有可见刻度都会使用 5 的倍数。
 
 后台采样数据会保存在 AstrBot 数据目录的 `plugin_data/astrbot_plugin_mc_motd/history.sqlite3`。插件会按 `group:群号` 隔离群配置和历史；私聊会按私聊会话单独保存。

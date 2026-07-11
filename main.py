@@ -26,7 +26,7 @@ except Exception:
 
 
 PLUGIN_NAME = "astrbot_plugin_mc_motd"
-RENDER_CACHE_VERSION = "3"
+RENDER_CACHE_VERSION = "4"
 COLOR_CODE_RE = re.compile(r"§.")
 DISPLAY_TZ = timezone(timedelta(hours=8), "Asia/Shanghai")
 MINECRAFT_COLOR_CODES = {
@@ -783,7 +783,6 @@ def build_y_ticks(
 
 def build_chart(
     rows: List[sqlite3.Row],
-    current: MinecraftStatus,
     max_points: int,
     start_ts: float,
     end_ts: float,
@@ -793,8 +792,6 @@ def build_chart(
 
     online_values = [int(row["online"]) for row in successful]
     peak_online = max(online_values) if online_values else 0
-    if current.ok and current.online is not None:
-        peak_online = max(peak_online, current.online)
 
     y_max = max(1, math.ceil(max(peak_online, 1) * 1.2))
 
@@ -849,7 +846,6 @@ def build_x_ticks(start_ts: float, end_ts: float) -> List[Dict[str, str]]:
             {
                 "x": str(x),
                 "anchor": anchor,
-                "date": format_ts(ts, "%m-%d"),
                 "time": format_ts(ts, "%H:%M"),
             }
         )
@@ -1286,8 +1282,10 @@ class MinecraftMotdPlugin(Star):
                     f"[{PLUGIN_NAME}] 背景图刷新失败，继续使用旧缓存: {exc}"
                 )
                 return cache.image_url
-            logger.warning(f"[{PLUGIN_NAME}] 背景图获取失败，本次使用纯色背景: {exc}")
-            return ""
+            logger.warning(
+                f"[{PLUGIN_NAME}] 背景图预取失败，改由浏览器加载原始 URL: {exc}"
+            )
+            return url
 
         self._background_cache = BackgroundCacheEntry(
             created_at=now,
@@ -1307,7 +1305,7 @@ class MinecraftMotdPlugin(Star):
     ) -> Dict[str, Any]:
         end_ts = current.sampled_at
         start_ts = end_ts - self._chart_hours() * 3600
-        chart = build_chart(rows, current, self._max_chart_points(), start_ts, end_ts)
+        chart = build_chart(rows, self._max_chart_points(), start_ts, end_ts)
         current_view = {
             "ok": current.ok,
             "online": current.online,
@@ -1331,9 +1329,7 @@ class MinecraftMotdPlugin(Star):
             "chart_hours": self._chart_hours(),
             "retention_days": self._retention_days(),
             "x_ticks": build_x_ticks(start_ts, end_ts),
-            "background_image_url": self._safe_text(
-                await self._background_image_for_render()
-            ),
+            "background_image_url": await self._background_image_for_render(),
             "background_opacity": f"{self._background_opacity():.2f}",
             "background_overlay_opacity": f"{self._background_overlay_opacity():.2f}",
             **chart,
