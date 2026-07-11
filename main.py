@@ -27,7 +27,7 @@ except Exception:
 
 
 PLUGIN_NAME = "SimpMC-Motd"
-RENDER_CACHE_VERSION = "5"
+RENDER_CACHE_VERSION = "6"
 COLOR_CODE_RE = re.compile(r"§.")
 DISPLAY_TZ = timezone(timedelta(hours=8), "Asia/Shanghai")
 MINECRAFT_COLOR_CODES = {
@@ -99,6 +99,7 @@ class ServerTarget:
 class RenderCacheEntry:
     created_at: float
     image_url: str
+    warning: str = ""
 
 
 @dataclass
@@ -112,6 +113,7 @@ class BackgroundCacheEntry:
 class BackgroundRenderImage:
     image_url: str
     is_fallback: bool = False
+    warning: str = ""
 
 
 class HistoryStore:
@@ -876,16 +878,22 @@ def build_chart(
         chart_status = "error"
         chart_color = "#ff5f6d"
         chart_fill_opacity = "0.18"
+        chart_axis_color = chart_color
+        chart_tick_color = chart_color
         empty_text = "服务器连接失败"
     elif len(successful) < 2:
         chart_status = "empty"
         chart_color = "#aeb7c3"
         chart_fill_opacity = "0.10"
+        chart_axis_color = chart_color
+        chart_tick_color = chart_color
         empty_text = "暂无历史在线人数"
     else:
         chart_status = "ok"
         chart_color = "#58f15f"
         chart_fill_opacity = "0.70"
+        chart_axis_color = "#ffffff"
+        chart_tick_color = "#d2d8e2"
         empty_text = ""
 
     return {
@@ -899,6 +907,8 @@ def build_chart(
         "chart_status": chart_status,
         "chart_color": chart_color,
         "chart_fill_opacity": chart_fill_opacity,
+        "chart_axis_color": chart_axis_color,
+        "chart_tick_color": chart_tick_color,
         "empty_text": empty_text,
     }
 
@@ -1357,17 +1367,25 @@ class MinecraftMotdPlugin(Star):
                 timeout=timeout + 0.5,
             )
         except Exception as exc:
+            warning = (
+                f"背景图 URL 无法访问：{url}\n"
+                f"错误：{type(exc).__name__}: {exc}"
+            )
             if cache is not None and cache.source_url == url:
                 logger.warning(
                     f"[{PLUGIN_NAME}] 背景图刷新失败，继续使用旧缓存: {exc}"
                 )
-                return BackgroundRenderImage(image_url=cache.image_url)
+                return BackgroundRenderImage(
+                    image_url=cache.image_url,
+                    warning=warning + "\n已使用旧背景缓存。",
+                )
             logger.warning(
                 f"[{PLUGIN_NAME}] 背景图预取失败，改用内置背景: {exc}"
             )
             return BackgroundRenderImage(
                 image_url=fallback_background_data_uri(),
                 is_fallback=True,
+                warning=warning + "\n已使用内置背景。",
             )
 
         self._background_cache = BackgroundCacheEntry(
@@ -1421,6 +1439,7 @@ class MinecraftMotdPlugin(Star):
             "background_image_url": background.image_url,
             "background_opacity": f"{background_opacity:.2f}",
             "background_overlay_opacity": f"{background_overlay_opacity:.2f}",
+            "background_warning": background.warning,
             **chart,
         }
 
@@ -1440,7 +1459,7 @@ class MinecraftMotdPlugin(Star):
             ]
         )
 
-    def _get_cached_render(self, cache_key: str) -> Optional[str]:
+    def _get_cached_render(self, cache_key: str) -> Optional[RenderCacheEntry]:
         ttl = self._render_cache_seconds()
         if ttl <= 0:
             return None
@@ -1450,15 +1469,21 @@ class MinecraftMotdPlugin(Star):
         if time.time() - entry.created_at > ttl:
             self._render_cache.pop(cache_key, None)
             return None
-        return entry.image_url
+        return entry
 
-    def _set_cached_render(self, cache_key: str, image_url: str) -> None:
+    def _set_cached_render(
+        self,
+        cache_key: str,
+        image_url: str,
+        warning: str = "",
+    ) -> None:
         ttl = self._render_cache_seconds()
         if ttl <= 0:
             return
         self._render_cache[cache_key] = RenderCacheEntry(
             created_at=time.time(),
             image_url=image_url,
+            warning=warning,
         )
 
     def _plain_status(self, target: ServerTarget, current: MinecraftStatus) -> str:
@@ -1489,9 +1514,11 @@ class MinecraftMotdPlugin(Star):
             )
             return
         cache_key = self._render_cache_key(target)
-        cached_image = self._get_cached_render(cache_key)
-        if cached_image:
-            yield event.image_result(cached_image)
+        cached_render = self._get_cached_render(cache_key)
+        if cached_render:
+            yield event.image_result(cached_render.image_url)
+            if cached_render.warning:
+                yield event.plain_result(cached_render.warning)
             return
 
         current = await self._current_status(target, allow_reuse=True)
@@ -1514,8 +1541,11 @@ class MinecraftMotdPlugin(Star):
                     "scale": "device",
                 },
             )
-            self._set_cached_render(cache_key, url)
+            warning = str(data.get("background_warning") or "")
+            self._set_cached_render(cache_key, url, warning)
             yield event.image_result(url)
+            if warning:
+                yield event.plain_result(warning)
         except Exception as exc:
             logger.exception(f"[{PLUGIN_NAME}] render status image failed: {exc}")
             yield event.plain_result(

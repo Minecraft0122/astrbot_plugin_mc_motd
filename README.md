@@ -87,7 +87,7 @@ group:987654321
 
 `/motd` 和后台采样默认会复用最近 `30` 秒的状态，避免短时间内重复 ping 同一服务器。可以通过 `sample_reuse_seconds` 调整，设为 `0` 可关闭复用。插件默认不会发送 Minecraft 协议里的额外 latency ping 包；如果确实需要记录延迟，可以把 `send_latency_ping` 设为 `true`。
 
-图片通过 AstrBot 的 HTML 渲染能力生成 PNG，本质上会启动/调用浏览器渲染模板并截图。远程背景图和远程资源会影响首次渲染速度；插件默认会把远程背景缓存 `3600` 秒，后续渲染使用本地 data URI。预取失败时会使用旧缓存；没有旧缓存或没有配置远程背景时，会使用内置背景，避免背景直接消失。可以通过 `background_cache_seconds`、`background_fetch_timeout_seconds` 和 `background_max_bytes` 调整。
+图片通过 AstrBot 的 HTML 渲染能力生成 PNG，本质上会启动/调用浏览器渲染模板并截图。远程背景图和远程资源会影响首次渲染速度；插件默认会把远程背景缓存 `3600` 秒，后续渲染使用本地 data URI。预取失败时会使用旧缓存；没有旧缓存或没有配置远程背景时，会使用内置背景，避免背景直接消失。配置的背景 URL 无法访问时，插件会额外发送文字提示，不会把错误画进图片。可以通过 `background_cache_seconds`、`background_fetch_timeout_seconds` 和 `background_max_bytes` 调整。
 
 状态图会尽量保留 Minecraft MOTD 中的 JSON 颜色和 `§` 颜色码。
 
@@ -95,6 +95,6 @@ group:987654321
 
 状态图的 X 轴会按真实采样时间窗口显示时间，不额外标注日期；Y 轴顶部人数按历史在线人数最大值计算，除顶部最大值外，所有可见刻度都会使用 5 的倍数。
 
-历史在线人数不足两条时，图表会用灰色提示暂无历史；当前服务器无法连接时，图表和离线状态会用红色提示。
+历史在线人数不足两条时，历史图表区会变灰；当前服务器无法连接时，历史图表区和离线状态会用红色提示。
 
 后台采样数据会保存在 AstrBot 数据目录的 `plugin_data/SimpMC-Motd/history.sqlite3`。插件会按 `group:群号` 隔离群配置和历史；私聊会按私聊会话单独保存。
