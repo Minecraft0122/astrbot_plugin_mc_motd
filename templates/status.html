@@ -26,7 +26,12 @@
       width: 790px;
       height: 500px;
       padding: 14px 16px 12px;
-      background: #2a3540;
+      background:
+        linear-gradient(rgba(42, 53, 64, 0.10), rgba(42, 53, 64, 0.10)),
+        {% if background_image_url %}url("{{ background_image_url | safe }}"){% else %}none{% endif %},
+        #2a3540;
+      background-size: cover, cover, auto;
+      background-position: center, center, center;
       border: 1px solid rgba(255, 255, 255, 0.10);
       border-radius: 6px;
       box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);

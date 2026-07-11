@@ -108,6 +108,12 @@ class BackgroundCacheEntry:
     image_url: str
 
 
+@dataclass
+class BackgroundRenderImage:
+    image_url: str
+    is_fallback: bool = False
+
+
 class HistoryStore:
     def __init__(self, db_path: Path):
         self.db_path = db_path
@@ -555,18 +561,23 @@ def safe_favicon(value: Any) -> Optional[str]:
     return None
 
 
-def fallback_background_data_uri(width: int = 160, height: int = 90) -> str:
+def fallback_background_data_uri(width: int = 316, height: int = 200) -> str:
     rows = bytearray()
     for y in range(height):
         rows.append(0)
         for x in range(width):
-            shade = int(18 * (x / max(1, width - 1)) + 16 * (y / max(1, height - 1)))
-            stripe = 18 if ((x + y) // 18) % 2 == 0 else 0
+            nx = x / max(1, width - 1)
+            ny = y / max(1, height - 1)
+            diagonal = ((x + y * 2) // 26) % 2
+            band = max(0.0, 1.0 - abs((nx * 1.25 + ny * 0.55) - 0.92) * 2.4)
+            r = int(34 + 38 * nx + 22 * ny + 34 * band + 18 * diagonal)
+            g = int(62 + 48 * nx + 30 * ny + 68 * band + 12 * diagonal)
+            b = int(84 + 54 * nx + 48 * ny + 50 * band + 24 * diagonal)
             rows.extend(
                 (
-                    min(255, 46 + shade + stripe // 3),
-                    min(255, 70 + shade + stripe // 2),
-                    min(255, 88 + shade + stripe),
+                    min(255, r),
+                    min(255, g),
+                    min(255, b),
                 )
             )
 
@@ -692,6 +703,7 @@ def row_to_status(row: sqlite3.Row, target: ServerTarget) -> MinecraftStatus:
         max_players=int(row["max_players"]) if row["max_players"] is not None else None,
         motd_plain=str(row["motd"] or ""),
         version_name=str(row["version_name"] or ""),
+        favicon=safe_favicon(raw_json.get("favicon") if raw_json else None),
         latency_ms=int(row["latency_ms"]) if row["latency_ms"] is not None else None,
         error=str(row["error"] or ""),
         raw_json=raw_json,
@@ -1313,13 +1325,16 @@ class MinecraftMotdPlugin(Star):
                 return latest
             return await self._sample_and_store(target)
 
-    async def _background_image_for_render(self) -> str:
+    async def _background_image_for_render(self) -> BackgroundRenderImage:
         url = self._background_image_url()
         if not url:
-            return ""
+            return BackgroundRenderImage(
+                image_url=fallback_background_data_uri(),
+                is_fallback=True,
+            )
         ttl = self._background_cache_seconds()
         if ttl <= 0:
-            return url
+            return BackgroundRenderImage(image_url=url)
 
         now = time.time()
         cache = self._background_cache
@@ -1328,7 +1343,7 @@ class MinecraftMotdPlugin(Star):
             and cache.source_url == url
             and now - cache.created_at <= ttl
         ):
-            return cache.image_url
+            return BackgroundRenderImage(image_url=cache.image_url)
 
         timeout = self._background_fetch_timeout()
         try:
@@ -1346,18 +1361,21 @@ class MinecraftMotdPlugin(Star):
                 logger.warning(
                     f"[{PLUGIN_NAME}] 背景图刷新失败，继续使用旧缓存: {exc}"
                 )
-                return cache.image_url
+                return BackgroundRenderImage(image_url=cache.image_url)
             logger.warning(
                 f"[{PLUGIN_NAME}] 背景图预取失败，改用内置背景: {exc}"
             )
-            return fallback_background_data_uri()
+            return BackgroundRenderImage(
+                image_url=fallback_background_data_uri(),
+                is_fallback=True,
+            )
 
         self._background_cache = BackgroundCacheEntry(
             created_at=now,
             source_url=url,
             image_url=image_url,
         )
-        return image_url
+        return BackgroundRenderImage(image_url=image_url)
 
     def _safe_text(self, value: Any) -> str:
         return html.escape(str(value or ""), quote=True)
@@ -1371,6 +1389,12 @@ class MinecraftMotdPlugin(Star):
         end_ts = current.sampled_at
         start_ts = end_ts - self._chart_hours() * 3600
         chart = build_chart(rows, current, self._max_chart_points(), start_ts, end_ts)
+        background = await self._background_image_for_render()
+        background_opacity = self._background_opacity()
+        background_overlay_opacity = self._background_overlay_opacity()
+        if background.is_fallback:
+            background_opacity = max(background_opacity, 0.92)
+            background_overlay_opacity = min(background_overlay_opacity, 0.36)
         current_view = {
             "ok": current.ok,
             "online": current.online,
@@ -1394,9 +1418,9 @@ class MinecraftMotdPlugin(Star):
             "chart_hours": self._chart_hours(),
             "retention_days": self._retention_days(),
             "x_ticks": build_x_ticks(start_ts, end_ts),
-            "background_image_url": await self._background_image_for_render(),
-            "background_opacity": f"{self._background_opacity():.2f}",
-            "background_overlay_opacity": f"{self._background_overlay_opacity():.2f}",
+            "background_image_url": background.image_url,
+            "background_opacity": f"{background_opacity:.2f}",
+            "background_overlay_opacity": f"{background_overlay_opacity:.2f}",
             **chart,
         }
 
