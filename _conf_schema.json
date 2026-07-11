@@ -78,16 +78,16 @@
     "default": 3600
   },
   "background_fetch_timeout_seconds": {
-    "description": "插件预取远程背景图的超时时间，单位秒。超时后使用旧缓存；没有旧缓存时改由浏览器加载原始背景 URL",
+    "description": "插件预取远程背景图的超时时间，单位秒。超时后使用旧缓存；没有旧缓存时使用内置背景",
     "type": "float",
-    "hint": "1.5",
-    "default": 1.5
+    "hint": "5.0",
+    "default": 5.0
   },
   "background_max_bytes": {
     "description": "远程背景图最大缓存大小，单位字节。过大的图片会被忽略以避免渲染变慢",
     "type": "int",
-    "hint": "3145728",
-    "default": 3145728
+    "hint": "8388608",
+    "default": 8388608
   },
   "enable_group_whitelist": {
     "description": "是否启用群白名单。启用后，只有 group_whitelist 或 group_servers_json 中列出的群可以使用 /motd",

@@ -1,5 +1,5 @@
 name: simpmc_motd
 desc: Periodically fetch a local Minecraft Java server MOTD, keep online-player history, and render a status image.
-version: v1.3.5
+version: v1.3.6
 author: Codex
 repo: "https://github.com/Minecraft0122/SimpMC-Motd"

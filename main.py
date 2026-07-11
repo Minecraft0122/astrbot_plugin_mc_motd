@@ -11,6 +11,7 @@ import sqlite3
 import struct
 import time
 import urllib.request
+import zlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -26,7 +27,7 @@ except Exception:
 
 
 PLUGIN_NAME = "SimpMC-Motd"
-RENDER_CACHE_VERSION = "4"
+RENDER_CACHE_VERSION = "5"
 COLOR_CODE_RE = re.compile(r"§.")
 DISPLAY_TZ = timezone(timedelta(hours=8), "Asia/Shanghai")
 MINECRAFT_COLOR_CODES = {
@@ -554,6 +555,41 @@ def safe_favicon(value: Any) -> Optional[str]:
     return None
 
 
+def fallback_background_data_uri(width: int = 160, height: int = 90) -> str:
+    rows = bytearray()
+    for y in range(height):
+        rows.append(0)
+        for x in range(width):
+            shade = int(18 * (x / max(1, width - 1)) + 16 * (y / max(1, height - 1)))
+            stripe = 18 if ((x + y) // 18) % 2 == 0 else 0
+            rows.extend(
+                (
+                    min(255, 46 + shade + stripe // 3),
+                    min(255, 70 + shade + stripe // 2),
+                    min(255, 88 + shade + stripe),
+                )
+            )
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(payload))
+            + kind
+            + payload
+            + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+        )
+
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(
+            b"IHDR",
+            struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0),
+        )
+        + chunk(b"IDAT", zlib.compress(bytes(rows), 9))
+        + chunk(b"IEND", b"")
+    )
+    return f"data:image/png;base64,{base64.b64encode(png).decode('ascii')}"
+
+
 def fetch_image_data_uri(url: str, timeout: float, max_bytes: int) -> str:
     request = urllib.request.Request(
         url,
@@ -783,6 +819,7 @@ def build_y_ticks(
 
 def build_chart(
     rows: List[sqlite3.Row],
+    current: MinecraftStatus,
     max_points: int,
     start_ts: float,
     end_ts: float,
@@ -805,24 +842,52 @@ def build_chart(
 
     line_points = ""
     area_points = ""
+    point_markers: List[Dict[str, str]] = []
     if sampled:
         points: List[str] = []
+        marker_values: List[Tuple[float, float]] = []
         for row in sampled:
             x = plot_left + (float(row["sampled_at"]) - start_ts) / span * width
             x = min(plot_right, max(plot_left, x))
             online = max(0, int(row["online"]))
             y = plot_bottom - (online / y_max) * height
             points.append(f"{x:.1f},{y:.1f}")
+            marker_values.append((x, y))
         line_points = " ".join(points)
-        area_points = f"{points[0].split(',')[0]},{plot_bottom} {line_points} {points[-1].split(',')[0]},{plot_bottom}"
+        if len(points) > 1:
+            area_points = f"{points[0].split(',')[0]},{plot_bottom} {line_points} {points[-1].split(',')[0]},{plot_bottom}"
+        else:
+            x, y = marker_values[0]
+            point_markers.append({"x": f"{x:.1f}", "y": f"{y:.1f}"})
+
+    if not current.ok:
+        chart_status = "error"
+        chart_color = "#ff5f6d"
+        chart_fill_opacity = "0.18"
+        empty_text = "服务器连接失败"
+    elif len(successful) < 2:
+        chart_status = "empty"
+        chart_color = "#aeb7c3"
+        chart_fill_opacity = "0.10"
+        empty_text = "暂无历史在线人数"
+    else:
+        chart_status = "ok"
+        chart_color = "#58f15f"
+        chart_fill_opacity = "0.70"
+        empty_text = ""
 
     return {
         "line_points": line_points,
         "area_points": area_points,
+        "point_markers": point_markers,
         "y_max": y_max,
         "y_ticks": build_y_ticks(y_max, plot_top, plot_bottom),
         "peak_online": peak_online,
         "sample_count": len(successful),
+        "chart_status": chart_status,
+        "chart_color": chart_color,
+        "chart_fill_opacity": chart_fill_opacity,
+        "empty_text": empty_text,
     }
 
 
@@ -961,10 +1026,10 @@ class MinecraftMotdPlugin(Star):
         return max(0, int(self._cfg("background_cache_seconds", 3600)))
 
     def _background_fetch_timeout(self) -> float:
-        return max(0.2, float(self._cfg("background_fetch_timeout_seconds", 1.5)))
+        return max(0.2, float(self._cfg("background_fetch_timeout_seconds", 5.0)))
 
     def _background_max_bytes(self) -> int:
-        return max(128 * 1024, int(self._cfg("background_max_bytes", 3 * 1024 * 1024)))
+        return max(128 * 1024, int(self._cfg("background_max_bytes", 8 * 1024 * 1024)))
 
     def _allow_member_set_server(self) -> bool:
         value = self._cfg("allow_member_set_server", False)
@@ -1283,9 +1348,9 @@ class MinecraftMotdPlugin(Star):
                 )
                 return cache.image_url
             logger.warning(
-                f"[{PLUGIN_NAME}] 背景图预取失败，改由浏览器加载原始 URL: {exc}"
+                f"[{PLUGIN_NAME}] 背景图预取失败，改用内置背景: {exc}"
             )
-            return url
+            return fallback_background_data_uri()
 
         self._background_cache = BackgroundCacheEntry(
             created_at=now,
@@ -1305,7 +1370,7 @@ class MinecraftMotdPlugin(Star):
     ) -> Dict[str, Any]:
         end_ts = current.sampled_at
         start_ts = end_ts - self._chart_hours() * 3600
-        chart = build_chart(rows, self._max_chart_points(), start_ts, end_ts)
+        chart = build_chart(rows, current, self._max_chart_points(), start_ts, end_ts)
         current_view = {
             "ok": current.ok,
             "online": current.online,
